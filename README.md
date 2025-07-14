@@ -23,8 +23,8 @@
 > Make sure that neovim is in the root directory of your project
 
 - Before using taskless, you must set up your cmake project first:
-- - Set up your CMakeLists.txt like normal
-- - Have a CMakePresets.json file in your root directory that looks something like this:
+  - Set up your CMakeLists.txt like normal
+  - Have a CMakePresets.json file in your root directory that looks something like this:
 ```
 {
     "version": 8,
