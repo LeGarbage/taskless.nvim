@@ -19,10 +19,16 @@ local function load_state()
 
     if ok then
         state = vim.json.decode(table.concat(state_text))
+    else
+        vim.notify("Could not load configuration", vim.log.levels.WARN, { title = "Taskless" })
     end
 end
 
-load_state()
+vim.api.nvim_create_autocmd("Filetype", {
+    pattern = { "c", "cpp" },
+    callback = load_state,
+    group = vim.api.nvim_create_augroup("Taskless", {}),
+})
 
 -- *** CONFIGURE UTILS ***
 
@@ -107,6 +113,7 @@ end
 -- *** RUN UTILS ***
 
 function M.get_run_targets()
+    -- FIX: Check if the build preset exists and has a configure preset first
     local api_path = string.gsub(state.current_preset.configurePreset.binaryDir .. "/.cmake/api/v1/reply",
         [[${sourceDir}/]], "")
     local index_text = vim.fn.readfile(vim.fn.glob(api_path .. "/index*.json"))
