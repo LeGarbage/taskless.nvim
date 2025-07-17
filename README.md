@@ -13,14 +13,15 @@
     dependencies = {
         "akinsho/toggleterm.nvim"
     }
-    -- More configuration to come
+    opts = {
+        -- See configuration below
+    }
 }
 ```
 
 ## Configuration
 > [!IMPORTANT]
 > You MUST call require("taskless").setup()!
-> Your plugin manager may do this for you
 
 Default configuration:
 ```
