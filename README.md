@@ -4,9 +4,6 @@
 > [!NOTE]
 > This plugin is based on [neovim tasks](https://github.com/Shatur/neovim-tasks)
 
-> [!CAUTION]
-> TODO: Add configuration options
-
 ## Installation
 
 ### Lazy
@@ -20,9 +17,26 @@
 }
 ```
 
+## Configuration
+> [!IMPORTANT]
+> You MUST call require("taskless").setup()!
+> Your plugin manager may do this for you
+
+Default configuration:
+```
+{
+    -- The default preset that will be used if none is provided
+    -- Set to empty string to disable
+    default_preset = "debug",
+    -- Whether to use the only target if no target is selected and there is only one
+    use_only_target = true,
+}
+```
+More configuration to come
+
 ## How to use
 
-> [!NOTE]
+> [!IMPORTANT]
 > Make sure that neovim is in the root directory of your project
 
 - Before using taskless, you must set up your cmake project first:

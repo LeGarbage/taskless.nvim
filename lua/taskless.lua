@@ -5,21 +5,10 @@ local state = {
     current_target = {},
 }
 
----@diagnostic disable-next-line: unused-local
 local config
 
 local Terminal = require("toggleterm.terminal").Terminal
 local term = Terminal:new({ display_name = "CMake", close_on_exit = false, direction = "horizontal" })
-
--- *** SETUP ***
--- TODO: Add default confuguration
-local defaults = {}
-
--- TODO: Make the config do something
-function M.setup(user_config)
-    ---@diagnostic disable-next-line: unused-local
-    config = vim.tbl_deep_extend("force", defaults, user_config)
-end
 
 -- *** STATE UTILS ***
 
@@ -34,14 +23,42 @@ local function load_state()
         state = vim.json.decode(table.concat(state_text))
     else
         vim.notify("Could not load configuration", vim.log.levels.WARN, { title = "Taskless" })
+        if #config.default_preset > 0 and not next(state.current_preset) then
+            M.select_preset(config.default_preset, false)
+        end
+
+        local target = M.get_run_targets()[1]
+        if target and config.use_only_target and not next(state.current_target) then
+            state.current_target = target
+            vim.notify("Target " .. state.current_target.name .. " has been selected", vim.log.levels.INFO,
+                { title = "Taskless" })
+        end
     end
 end
 
-vim.api.nvim_create_autocmd("Filetype", {
-    pattern = { "c", "cpp" },
-    callback = load_state,
-    group = vim.api.nvim_create_augroup("Taskless", {}),
-})
+-- *** SETUP ***
+local defaults = {
+    -- The default preset that will be used if none is provided
+    -- Set to empty string to disable
+    default_preset = "debug",
+    -- Whether to use the only target if no target is selected and there is only one
+    use_only_target = true,
+}
+
+function M.setup(user_config)
+    if user_config then
+        config = vim.tbl_deep_extend("force", defaults, user_config)
+    else
+        config = defaults
+    end
+
+    -- Only trigger on c/c++ files
+    vim.api.nvim_create_autocmd("Filetype", {
+        pattern = { "c", "cpp" },
+        callback = load_state,
+        group = vim.api.nvim_create_augroup("Taskless", {}),
+    })
+end
 
 -- *** GENERAL UTILS ***
 local function run_in_term(cmd)
@@ -65,7 +82,7 @@ function M.configure()
             state.current_preset.configurePreset.binaryDir .. "/.cmake/api/v1/query/codemodel-v2", [[${sourceDir}/]], "")
         if vim.fn.filewritable(api_path) == 0 then
             vim.fn.mkdir(string.gsub(api_path, "/codemodel-v2", ""), "p")
-            vim.fn.writefile("", api_path)
+            vim.fn.writefile({ "" }, api_path)
         end
     end
 end
@@ -89,7 +106,7 @@ function M.build()
     end
 end
 
-function M.select_preset(preset)
+function M.select_preset(preset, save)
     if not vim.fn.filereadable(vim.fn.getcwd() .. "/" .. "CMakePresets.json") then
         vim.notify("CMakePresets.json not found", vim.log.levels.ERROR, { title = "Taskless" })
         return
@@ -125,7 +142,10 @@ function M.select_preset(preset)
 
     vim.notify("Preset " .. state.current_preset.name .. " has been selected", vim.log.levels.INFO,
         { title = "Taskless" })
-    save_state()
+
+    if type(save) == "nil" or save then
+        save_state()
+    end
 end
 
 -- *** RUN UTILS ***
