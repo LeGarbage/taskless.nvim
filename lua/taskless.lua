@@ -5,8 +5,21 @@ local state = {
     current_target = {},
 }
 
+---@diagnostic disable-next-line: unused-local
+local config
+
 local Terminal = require("toggleterm.terminal").Terminal
 local term = Terminal:new({ display_name = "CMake", close_on_exit = false, direction = "horizontal" })
+
+-- *** SETUP ***
+-- TODO: Add default confuguration
+local defaults = {}
+
+-- TODO: Make the config do something
+function M.setup(user_config)
+    ---@diagnostic disable-next-line: unused-local
+    config = vim.tbl_deep_extend("force", defaults, user_config)
+end
 
 -- *** STATE UTILS ***
 
@@ -30,19 +43,27 @@ vim.api.nvim_create_autocmd("Filetype", {
     group = vim.api.nvim_create_augroup("Taskless", {}),
 })
 
+-- *** GENERAL UTILS ***
+local function run_in_term(cmd)
+    if not term:is_open() then
+        term:toggle()
+    end
+    term:send(cmd, state.current_preset.name)
+end
+
 -- *** CONFIGURE UTILS ***
 
 function M.configure()
     if not next(state.current_preset) then
         vim.notify("Configure failed: Please select a preset", vim.log.levels.ERROR, { title = "Taskless" })
+    elseif not (state.current_preset.configurePreset) then
+        vim.notify("Configure failed: Build preset does not specify a configure preset", vim.log.levels.ERROR,
+            { title = "Taskless" })
     else
-        if not term:is_open() then
-            term:toggle()
-        end
-        term:send(string.format("cmake --preset %s", state.current_preset.configurePreset.name))
+        run_in_term(string.format("cmake --preset %s", state.current_preset.configurePreset.name))
         local api_path = string.gsub(
             state.current_preset.configurePreset.binaryDir .. "/.cmake/api/v1/query/codemodel-v2", [[${sourceDir}/]], "")
-        if #vim.fn.filewritable(api_path) == 0 then
+        if vim.fn.filewritable(api_path) == 0 then
             vim.fn.mkdir(string.gsub(api_path, "/codemodel-v2", ""), "p")
             vim.fn.writefile("", api_path)
         end
@@ -64,10 +85,7 @@ function M.build()
     if not next(state.current_preset) then
         vim.notify("Build failed: Please select a preset", vim.log.levels.ERROR, { title = "Taskless" })
     else
-        if not term:is_open() then
-            term:toggle()
-        end
-        term:send(string.format("cmake --build --preset %s", state.current_preset.name))
+        run_in_term(string.format("cmake --build --preset %s", state.current_preset.name))
     end
 end
 
@@ -113,7 +131,19 @@ end
 -- *** RUN UTILS ***
 
 function M.get_run_targets()
-    -- FIX: Check if the build preset exists and has a configure preset first
+    if not next(state.current_preset) then
+        vim.notify("Could not get targets: Please select a preset", vim.log.levels.ERROR, { title = "Taskless" })
+        return
+    elseif not (state.current_preset.configurePreset) then
+        vim.notify("Could not get targets: Build preset does not specify a configure preset", vim.log.levels.ERROR,
+            { title = "Taskless" })
+        return
+    elseif not (state.current_preset.configurePreset.binaryDir) then
+        vim.notify("Could not get targets: Configure preset does not specify a binary dir", vim.log.levels.ERROR,
+            { title = "Taskless" })
+        return
+    end
+
     local api_path = string.gsub(state.current_preset.configurePreset.binaryDir .. "/.cmake/api/v1/reply",
         [[${sourceDir}/]], "")
     local index_text = vim.fn.readfile(vim.fn.glob(api_path .. "/index*.json"))
@@ -135,17 +165,16 @@ function M.run()
     else
         M.build()
 
-        if not term:is_open() then
-            term:toggle()
-        end
         local build_path = string.gsub(state.current_preset.configurePreset.binaryDir,
             [[${sourceDir}/]], "")
-        term:send(string.format("./%s", build_path .. "/" .. state.current_target.artifacts[1].path))
+        run_in_term(string.format("./%s", build_path .. "/" .. state.current_target.artifacts[1].path))
     end
 end
 
 function M.select_target(target)
     local targets = M.get_run_targets()
+    if not targets then return end
+
     if target then
         local found = false
         for _, target_data in ipairs(targets) do

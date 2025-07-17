@@ -1,6 +1,9 @@
 # Taskless
 ## Worry less about your tasks
 
+> [!NOTE]
+> This plugin is based on [neovim tasks](https://github.com/Shatur/neovim-tasks)
+
 > [!CAUTION]
 > TODO: Add configuration options
 
@@ -19,7 +22,7 @@
 
 ## How to use
 
-> [!CAUTION]
+> [!NOTE]
 > Make sure that neovim is in the root directory of your project
 
 - Before using taskless, you must set up your cmake project first:
