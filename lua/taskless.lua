@@ -22,17 +22,24 @@ local function load_state()
     if ok then
         state = vim.json.decode(table.concat(state_text))
     else
-        vim.notify("Could not load configuration", vim.log.levels.WARN, { title = "Taskless" })
-        if #config.default_preset > 0 and not next(state.current_preset) then
-            M.select_preset(config.default_preset, false)
-        end
+        vim.defer_fn(function()
+            vim.notify("Could not load configuration", vim.log.levels.WARN, { title = "Taskless" })
+            if #config.default_preset > 0 and not next(state.current_preset) then
+                M.select_preset(config.default_preset, false)
+            end
 
-        local target = M.get_run_targets()[1]
-        if target and config.use_only_target and not next(state.current_target) then
-            state.current_target = target
-            vim.notify("Target " .. state.current_target.name .. " has been selected", vim.log.levels.INFO,
-                { title = "Taskless" })
-        end
+            local target_ok, targets = pcall(M.get_run_targets)
+            targets = targets or {}
+            local target = targets[1]
+
+            if target and target_ok and config.use_only_target and not next(state.current_target) then
+                state.current_target = target
+                vim.schedule(function()
+                    vim.notify("Target " .. state.current_target.name .. " has been selected", vim.log.levels.INFO,
+                        { title = "Taskless" })
+                end)
+            end
+        end, 100)
     end
 end
 
@@ -55,7 +62,11 @@ function M.setup(user_config)
     -- Only trigger on c/c++ files
     vim.api.nvim_create_autocmd("Filetype", {
         pattern = { "c", "cpp" },
-        callback = load_state,
+        callback = function()
+            -- HACK: To prevent interferance with session managers like persistance, delay loading
+
+            vim.defer_fn(load_state, 100)
+        end,
         group = vim.api.nvim_create_augroup("Taskless", {}),
     })
 end
