@@ -89,11 +89,12 @@ function M.configure()
             { title = "Taskless" })
     else
         run_in_term(string.format("cmake --preset %s", state.current_preset.configurePreset.name))
-        local api_path = string.gsub(
-            state.current_preset.configurePreset.binaryDir .. "/.cmake/api/v1/query/codemodel-v2", [[${sourceDir}/]], "")
-        if vim.fn.filewritable(api_path) == 0 then
-            vim.fn.mkdir(string.gsub(api_path, "/codemodel-v2", ""), "p")
-            vim.fn.writefile({ "" }, api_path)
+        local api_dir = string.gsub(
+            state.current_preset.configurePreset.binaryDir .. "/.cmake/api/v1/query/", [[${sourceDir}/]], "")
+        local api_file = api_dir .. "codemodel-v2"
+        if vim.fn.filewritable(api_file) == 0 then
+            vim.fn.mkdir(api_dir, "p")
+            vim.fn.writefile({ "" }, api_file)
         end
     end
 end
