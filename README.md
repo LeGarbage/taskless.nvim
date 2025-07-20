@@ -10,6 +10,7 @@
 ```
 {
     "LeGarbage/taskless.nvim",
+    -- dependencies = { "mfussenegger/nvim-dap" } -- Only if you are using dap
     opts = {
         -- See configuration below
     }
@@ -73,3 +74,4 @@ Default configuration:
 >  The first time you use Taskless, run ```Taskless configure``` to generate the cmake api files
 - Run ```Taskless build``` to build the project based on your selected preset
 - Run ```Taskless run``` to build the project based on your selected preset and run the selected target
+- Run ```Taskless debug``` to build the project based on your selected preset start the debugger

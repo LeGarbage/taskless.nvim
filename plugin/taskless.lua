@@ -12,6 +12,8 @@ vim.api.nvim_create_user_command("Taskless", function(opts)
         taskless.select_preset(opts.fargs[2])
     elseif sub == "target" then
         taskless.select_target(opts.fargs[2])
+    elseif sub == "debug" then
+        taskless.debug()
     else
         print("Unknown subcommand: " .. tostring(sub))
     end
@@ -23,7 +25,7 @@ end, {
         local sub_arg = args[3]
 
         if not sub_arg then
-            return { "build", "configure", "run", "preset", "target" }
+            return { "build", "configure", "run", "preset", "target", "debug" }
         elseif sub_cmd == "preset" then
             return vim.tbl_map(function(p)
                 return p.name

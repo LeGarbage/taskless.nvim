@@ -26,7 +26,6 @@ local function load_state()
             end
 
             local target_ok, targets = pcall(M.get_run_targets)
-            targets = targets or {}
             local target = targets[1]
 
             if target and target_ok and config.use_only_target and not next(state.current_target) then
@@ -91,6 +90,10 @@ local function open_win(opts)
     else
         vim.api.nvim_set_current_win(M.winnr)
     end
+end
+
+local function close_win()
+    vim.api.nvim_win_close(M.winnr, true)
 end
 
 ---@param text string|string[]
@@ -257,15 +260,15 @@ end
 function M.get_run_targets()
     if not next(state.current_preset) then
         vim.notify("Could not get targets: Please select a preset", vim.log.levels.ERROR, { title = "Taskless" })
-        return
+        return {}
     elseif not (state.current_preset.configurePreset) then
         vim.notify("Could not get targets: Build preset does not specify a configure preset", vim.log.levels.ERROR,
             { title = "Taskless" })
-        return
+        return {}
     elseif not (state.current_preset.configurePreset.binaryDir) then
         vim.notify("Could not get targets: Configure preset does not specify a binary dir", vim.log.levels.ERROR,
             { title = "Taskless" })
-        return
+        return {}
     end
 
     local api_path = string.gsub(state.current_preset.configurePreset.binaryDir .. "/.cmake/api/v1/reply",
@@ -302,7 +305,7 @@ end
 
 function M.select_target(target)
     local targets = M.get_run_targets()
-    if not targets then return end
+    if #targets == 0 then return end
 
     if target then
         local found = false
@@ -335,6 +338,31 @@ function M.select_target(target)
     vim.notify("Target " .. state.current_target.name .. " has been selected", vim.log.levels.INFO,
         { title = "Taskless" })
     save_state()
+end
+
+-- *** DEBUG UTILS ***
+function M.debug()
+    if not next(state.current_target) then
+        vim.notify("Could not debug target: Please select a target", vim.log.levels.ERROR, { title = "Taskless" })
+    else
+        M.build(vim.schedule_wrap(function(result)
+            if result.code ~= 0 then
+                vim.notify("Could not debug target: Build failed", vim.log.levels.ERROR, { title = "Taskless" })
+                return
+            end
+
+            local ok, dap = pcall(require, "dap")
+
+            if not ok then
+                vim.notify("Could not debug target: Dap not installed", vim.log.levels.ERROR, { title = "Taskless" })
+                return
+            end
+
+            close_win()
+
+            dap.continue()
+        end))
+    end
 end
 
 return M
