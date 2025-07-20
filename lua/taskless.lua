@@ -97,7 +97,8 @@ local function close_win()
 end
 
 ---@param text string|string[]
-local function win_write(text)
+---@param newline? boolean
+local function win_write(text, newline)
     if not vim.api.nvim_buf_is_valid(M.bufnr) then
         return
     end
@@ -111,6 +112,10 @@ local function win_write(text)
         else
             break
         end
+    end
+
+    if newline then
+        table.insert(text, "")
     end
 
     local start_line = -1
@@ -140,11 +145,13 @@ local function run_in_term(command, on_exit)
         end
     end
 
-    vim.system(command, { text = true, stdin = true, stdout = handle_text, stderr = handle_text }, function(result)
-        if on_exit then
-            on_exit(result)
-        end
-    end)
+    vim.system(command, { text = true, stdin = true, stdout = handle_text, stderr = handle_text },
+        vim.schedule_wrap(function(result)
+            win_write("", true)
+            if on_exit then
+                on_exit(result)
+            end
+        end))
 end
 
 ---@param command string|string[]
@@ -161,9 +168,11 @@ local function start_term(command)
             open_win()
             vim.api.nvim_set_current_buf(M.bufnr)
 
-            win_write(termlines)
+            win_write(termlines, true)
         end
     })
+
+    vim.api.nvim_command("startinsert")
 end
 
 -- *** CONFIGURE UTILS ***
@@ -290,7 +299,7 @@ function M.run()
     if not next(state.current_target) then
         vim.notify("Could not run target: Please select a target", vim.log.levels.ERROR, { title = "Taskless" })
     else
-        M.build(vim.schedule_wrap(function(result)
+        M.build(function(result)
             if result.code ~= 0 then
                 vim.notify("Could not run target: Build failed", vim.log.levels.ERROR, { title = "Taskless" })
                 return
@@ -299,7 +308,7 @@ function M.run()
             local build_path = string.gsub(state.current_preset.configurePreset.binaryDir,
                 [[${sourceDir}/]], "")
             start_term(string.format("./%s", build_path .. "/" .. state.current_target.artifacts[1].path))
-        end))
+        end)
     end
 end
 
@@ -345,7 +354,7 @@ function M.debug()
     if not next(state.current_target) then
         vim.notify("Could not debug target: Please select a target", vim.log.levels.ERROR, { title = "Taskless" })
     else
-        M.build(vim.schedule_wrap(function(result)
+        M.build(function(result)
             if result.code ~= 0 then
                 vim.notify("Could not debug target: Build failed", vim.log.levels.ERROR, { title = "Taskless" })
                 return
@@ -361,7 +370,7 @@ function M.debug()
             close_win()
 
             dap.continue()
-        end))
+        end)
     end
 end
 
