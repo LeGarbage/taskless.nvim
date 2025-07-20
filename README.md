@@ -10,9 +10,6 @@
 ```
 {
     "LeGarbage/taskless.nvim",
-    dependencies = {
-        "akinsho/toggleterm.nvim"
-    }
     opts = {
         -- See configuration below
     }
@@ -31,9 +28,16 @@ Default configuration:
     default_preset = "debug",
     -- Whether to use the only target if no target is selected and there is only one
     use_only_target = true,
+    -- Options for the terminal window
+    --- @type vim.api.keyset.win_config
+    win_config = {
+        split = "below",
+        win = -1,
+        height = 10,
+        style = "minimal",
+    }
 }
 ```
-More configuration to come
 
 ## How to use
 

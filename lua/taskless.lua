@@ -7,9 +7,6 @@ local state = {
 
 local config
 
-local Terminal = require("toggleterm.terminal").Terminal
-local term = Terminal:new({ display_name = "CMake", close_on_exit = false, direction = "horizontal" })
-
 -- *** STATE UTILS ***
 
 local function save_state()
@@ -50,6 +47,14 @@ local defaults = {
     default_preset = "debug",
     -- Whether to use the only target if no target is selected and there is only one
     use_only_target = true,
+    -- Options for the terminal window
+    --- @type vim.api.keyset.win_config
+    win_config = {
+        split = "below",
+        win = -1,
+        height = 10,
+        style = "minimal",
+    }
 }
 
 function M.setup(user_config)
@@ -63,20 +68,99 @@ function M.setup(user_config)
     vim.api.nvim_create_autocmd("Filetype", {
         pattern = { "c", "cpp" },
         callback = function()
-            -- HACK: To prevent interferance with session managers like persistance, delay loading
-
+            -- To prevent interferance with session managers like persistance, delay loading
             vim.defer_fn(load_state, 100)
         end,
         group = vim.api.nvim_create_augroup("Taskless", {}),
     })
 end
 
--- *** GENERAL UTILS ***
-local function run_in_term(cmd)
-    if not term:is_open() then
-        term:toggle()
+-- *** WINDOW UTILS ***
+M.bufnr = -1
+M.winnr = -1
+M.job_id = -1
+local function open_win(opts)
+    opts = opts or config.win_config
+
+    if not vim.api.nvim_buf_is_valid(M.bufnr) then
+        M.bufnr = vim.api.nvim_create_buf(true, true)
     end
-    term:send(cmd, state.current_preset.name)
+
+    if not vim.api.nvim_win_is_valid(M.winnr) then
+        M.winnr = vim.api.nvim_open_win(M.bufnr, true, opts)
+    else
+        vim.api.nvim_set_current_win(M.winnr)
+    end
+end
+
+---@param text string|string[]
+local function win_write(text)
+    if not vim.api.nvim_buf_is_valid(M.bufnr) then
+        return
+    end
+    if type(text) == "string" then
+        text = vim.split(text, "\n")
+    end
+
+    for i = #text, 1, -1 do
+        if text[i] == "" then
+            table.remove(text, i)
+        else
+            break
+        end
+    end
+
+    local start_line = -1
+    if vim.api.nvim_buf_get_lines(M.bufnr, 0, 1, false)[1] == "" then
+        start_line = -2
+    end
+    vim.api.nvim_buf_set_lines(M.bufnr, start_line, -1, false, text)
+
+    local last_line = vim.api.nvim_buf_line_count(M.bufnr)
+    vim.api.nvim_win_set_cursor(M.winnr, { last_line, 0 })
+end
+
+-- *** GENERAL UTILS ***
+
+--- @param command string[]
+--- @param on_exit? fun(result: vim.SystemCompleted)
+local function run_in_term(command, on_exit)
+    open_win()
+
+    local function handle_text(_, data)
+        if data then
+            vim.schedule(
+                function()
+                    win_write(data)
+                end
+            )
+        end
+    end
+
+    vim.system(command, { text = true, stdin = true, stdout = handle_text, stderr = handle_text }, function(result)
+        if on_exit then
+            on_exit(result)
+        end
+    end)
+end
+
+---@param command string|string[]
+local function start_term(command)
+    open_win()
+    local job_bufnr = vim.api.nvim_create_buf(true, true)
+    vim.api.nvim_set_current_buf(job_bufnr)
+
+    M.job_id = vim.fn.jobstart(command, {
+        term = true,
+        on_exit = function()
+            local termlines = vim.api.nvim_buf_get_lines(job_bufnr, 0, -1, false)
+
+            open_win()
+            vim.api.nvim_set_current_buf(M.bufnr)
+
+            win_write(termlines)
+        end
+    })
 end
 
 -- *** CONFIGURE UTILS ***
@@ -88,14 +172,17 @@ function M.configure()
         vim.notify("Configure failed: Build preset does not specify a configure preset", vim.log.levels.ERROR,
             { title = "Taskless" })
     else
-        run_in_term(string.format("cmake --preset %s", state.current_preset.configurePreset.name))
-        local api_dir = string.gsub(
-            state.current_preset.configurePreset.binaryDir .. "/.cmake/api/v1/query/", [[${sourceDir}/]], "")
-        local api_file = api_dir .. "codemodel-v2"
-        if vim.fn.filewritable(api_file) == 0 then
-            vim.fn.mkdir(api_dir, "p")
-            vim.fn.writefile({ "" }, api_file)
-        end
+        run_in_term({ "cmake", "--preset", state.current_preset.configurePreset.name }, function(result)
+            if result.code == 0 then
+                local api_dir = string.gsub(
+                    state.current_preset.configurePreset.binaryDir .. "/.cmake/api/v1/query/", [[${sourceDir}/]], "")
+                local api_file = api_dir .. "codemodel-v2"
+                if vim.fn.filewritable(api_file) == 0 then
+                    vim.fn.mkdir(api_dir, "p")
+                    vim.fn.writefile({ "" }, api_file)
+                end
+            end
+        end)
     end
 end
 
@@ -110,12 +197,17 @@ function M.get_build_presets()
     return presets.buildPresets
 end
 
-function M.build()
+---@param on_done? fun(result: vim.SystemCompleted)
+function M.build(on_done)
     if not next(state.current_preset) then
         vim.notify("Build failed: Please select a preset", vim.log.levels.ERROR, { title = "Taskless" })
-    else
-        run_in_term(string.format("cmake --build --preset %s", state.current_preset.name))
+        return false
     end
+
+    -- local command = string.format("cmake --build --preset %s", state.current_preset.name)
+    local command = { "cmake", "--build", "--preset", state.current_preset.name }
+
+    run_in_term(command, on_done)
 end
 
 function M.select_preset(preset, save)
@@ -195,11 +287,16 @@ function M.run()
     if not next(state.current_target) then
         vim.notify("Could not run target: Please select a target", vim.log.levels.ERROR, { title = "Taskless" })
     else
-        M.build()
+        M.build(vim.schedule_wrap(function(result)
+            if result.code ~= 0 then
+                vim.notify("Could not run target: Build failed", vim.log.levels.ERROR, { title = "Taskless" })
+                return
+            end
 
-        local build_path = string.gsub(state.current_preset.configurePreset.binaryDir,
-            [[${sourceDir}/]], "")
-        run_in_term(string.format("./%s", build_path .. "/" .. state.current_target.artifacts[1].path))
+            local build_path = string.gsub(state.current_preset.configurePreset.binaryDir,
+                [[${sourceDir}/]], "")
+            start_term(string.format("./%s", build_path .. "/" .. state.current_target.artifacts[1].path))
+        end))
     end
 end
 
