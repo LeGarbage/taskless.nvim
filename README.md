@@ -29,6 +29,8 @@ Default configuration:
     default_preset = "debug",
     -- Whether to use the only target if no target is selected and there is only one
     use_only_target = true,
+    -- Whether to close the window after a successful build/run/config
+    close_window = false,
     -- Options for the terminal window
     --- @type vim.api.keyset.win_config
     win_config = {
@@ -38,6 +40,7 @@ Default configuration:
         style = "minimal",
     }
 }
+
 ```
 
 ## How to use

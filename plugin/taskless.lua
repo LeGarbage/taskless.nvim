@@ -1,19 +1,17 @@
-local taskless = require("taskless")
-
 vim.api.nvim_create_user_command("Taskless", function(opts)
     local sub = opts.fargs[1]
     if sub == "build" then
-        taskless.build()
+        require("taskless").build()
     elseif sub == "configure" then
-        taskless.configure()
+        require("taskless").configure()
     elseif sub == "run" then
-        taskless.run()
+        require("taskless").run()
     elseif sub == "preset" then
-        taskless.select_preset(opts.fargs[2])
+        require("taskless").select_preset(opts.fargs[2])
     elseif sub == "target" then
-        taskless.select_target(opts.fargs[2])
+        require("taskless").select_target(opts.fargs[2])
     elseif sub == "debug" then
-        taskless.debug()
+        require("taskless").debug()
     else
         print("Unknown subcommand: " .. tostring(sub))
     end
@@ -29,11 +27,11 @@ end, {
         elseif sub_cmd == "preset" then
             return vim.tbl_map(function(p)
                 return p.name
-            end, taskless.get_build_presets())
+            end, require("taskless").get_build_presets())
         elseif sub_cmd == "target" then
             return vim.tbl_map(function(t)
                 return t.name
-            end, taskless.get_run_targets())
+            end, require("taskless").get_run_targets())
         end
     end,
 })

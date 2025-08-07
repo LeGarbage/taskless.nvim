@@ -9,10 +9,12 @@ local config
 
 -- *** STATE UTILS ***
 
+-- Save the state to disk
 local function save_state()
     vim.fn.writefile({ vim.json.encode(state) }, "taskless.json")
 end
 
+-- Load the configured state
 local function load_state()
     local ok, state_text = pcall(vim.fn.readfile, "taskless.json")
 
@@ -46,6 +48,8 @@ local defaults = {
     default_preset = "debug",
     -- Whether to use the only target if no target is selected and there is only one
     use_only_target = true,
+    -- Whether to close the window after a successful build/run/config
+    close_window = false,
     -- Options for the terminal window
     --- @type vim.api.keyset.win_config
     win_config = {
@@ -56,6 +60,7 @@ local defaults = {
     }
 }
 
+-- Load the user's config and use defaults for non-specified options
 function M.setup(user_config)
     if user_config then
         config = vim.tbl_deep_extend("force", defaults, user_config)
@@ -78,13 +83,21 @@ end
 M.bufnr = -1
 M.winnr = -1
 M.job_id = -1
+
+-- Opens the output window
+---@param opts? vim.api.keyset.win_config The window options to use for the new window
 local function open_win(opts)
+    -- Use the configuration if none is provided
     opts = opts or config.win_config
 
+    -- Create a buffer if none exists
     if not vim.api.nvim_buf_is_valid(M.bufnr) then
+        -- A scratch buffer
         M.bufnr = vim.api.nvim_create_buf(true, true)
+        vim.api.nvim_set_option_value("readonly", true, { buf = M.bufnr })
     end
 
+    -- Create a new window if it doesn't exist and focus it
     if not vim.api.nvim_win_is_valid(M.winnr) then
         M.winnr = vim.api.nvim_open_win(M.bufnr, true, opts)
     else
@@ -92,20 +105,27 @@ local function open_win(opts)
     end
 end
 
+
+-- Close the output window
 local function close_win()
     vim.api.nvim_win_close(M.winnr, true)
 end
 
----@param text string|string[]
----@param newline? boolean
+-- Write text to the output window
+---@param text string|string[] The text or list of lines to display
+---@param newline? boolean Whether to add a blank line after the output
 local function win_write(text, newline)
     if not vim.api.nvim_buf_is_valid(M.bufnr) then
         return
     end
+
+    -- Split the string by newline
     if type(text) == "string" then
         text = vim.split(text, "\n")
     end
 
+
+    -- Remove blank lines
     for i = #text, 1, -1 do
         if text[i] == "" then
             table.remove(text, i)
@@ -114,22 +134,30 @@ local function win_write(text, newline)
         end
     end
 
+    -- Insert the blank line at the end
     if newline then
         table.insert(text, "")
     end
 
+    -- Start at the bottom, or ovewrite the top line if we are the first to print
     local start_line = -1
     if vim.api.nvim_buf_get_lines(M.bufnr, 0, 1, false)[1] == "" then
         start_line = -2
     end
-    vim.api.nvim_buf_set_lines(M.bufnr, start_line, -1, false, text)
 
+    -- Write the text
+    vim.api.nvim_set_option_value("readonly", false, { buf = M.bufnr })
+    vim.api.nvim_buf_set_lines(M.bufnr, start_line, -1, false, text)
+    vim.api.nvim_set_option_value("readonly", true, { buf = M.bufnr })
+
+    -- Set the cursor to the end of the text
     local last_line = vim.api.nvim_buf_line_count(M.bufnr)
     vim.api.nvim_win_set_cursor(M.winnr, { last_line, 0 })
 end
 
 -- *** GENERAL UTILS ***
 
+-- Run a command and pipe the output to the output window
 --- @param command string[]
 --- @param on_exit? fun(result: vim.SystemCompleted)
 local function run_in_term(command, on_exit)
@@ -137,6 +165,7 @@ local function run_in_term(command, on_exit)
 
     local function handle_text(_, data)
         if data then
+            -- Prevent weird stuff from happening with async
             vim.schedule(
                 function()
                     win_write(data)
@@ -145,8 +174,10 @@ local function run_in_term(command, on_exit)
         end
     end
 
+    -- Run the command and handle the output
     vim.system(command, { text = true, stdin = true, stdout = handle_text, stderr = handle_text },
         vim.schedule_wrap(function(result)
+            -- Add a newline after the output
             win_write("", true)
             if on_exit then
                 on_exit(result)
@@ -154,24 +185,31 @@ local function run_in_term(command, on_exit)
         end))
 end
 
+-- Run an interactive terminal that uses stdin
 ---@param command string|string[]
 local function start_term(command)
     open_win()
+
+    -- Create a new throwaway buffer to use as the terminal
     local job_bufnr = vim.api.nvim_create_buf(true, true)
     vim.api.nvim_set_current_buf(job_bufnr)
 
     M.job_id = vim.fn.jobstart(command, {
         term = true,
         on_exit = function()
+            -- Save the state of the terminal
             local termlines = vim.api.nvim_buf_get_lines(job_bufnr, 0, -1, false)
 
             open_win()
             vim.api.nvim_set_current_buf(M.bufnr)
-
+            -- Delete the old buffer
+            vim.api.nvim_buf_delete(job_bufnr, { force = true })
+            -- Write the output to the output window
             win_write(termlines, true)
         end
     })
 
+    -- Start the terminal with input captured
     vim.api.nvim_command("startinsert")
 end
 
