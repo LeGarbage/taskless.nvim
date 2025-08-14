@@ -18,21 +18,20 @@
 ```
 
 ## Configuration
-> [!IMPORTANT]
-> You MUST call require("taskless").setup()!
 
 Default configuration:
 ```
-{
-    -- The default preset that will be used if none is provided
-    -- Set to empty string to disable
+---@class Config
+---@field default_preset string The default preset that will be used if none is provided. Set to empty string to disable
+---@field use_only_target boolean Whether to use the only target if no target is selected and there is only one
+---@field close_window boolean Whether to close the window after a successful build/config
+---@field win_config vim.api.keyset.win_config Options for the terminal window
+
+---@type Config
+local defaults = {
     default_preset = "debug",
-    -- Whether to use the only target if no target is selected and there is only one
     use_only_target = true,
-    -- Whether to close the window after a successful build/run/config
     close_window = false,
-    -- Options for the terminal window
-    --- @type vim.api.keyset.win_config
     win_config = {
         split = "below",
         win = -1,
@@ -40,17 +39,16 @@ Default configuration:
         style = "minimal",
     }
 }
-
 ```
 
 ## How to use
 
 > [!IMPORTANT]
-> Make sure that neovim is in the root directory of your project
+> Make sure that neovim is in your project's root directory
 
 - Before using taskless, you must set up your cmake project first:
   - Set up your CMakeLists.txt like normal
-  - Have a CMakePresets.json file in your root directory that looks something like this:
+  - Have a CMakePresets.json file in your project's root directory that looks something like this:
 ```
 {
     "version": 8,

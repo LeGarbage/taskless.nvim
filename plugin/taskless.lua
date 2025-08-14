@@ -35,3 +35,13 @@ end, {
         end
     end,
 })
+
+-- Only trigger on c/c++ files
+vim.api.nvim_create_autocmd("Filetype", {
+    pattern = { "c", "cpp" },
+    callback = function()
+        -- To prevent interferance with session managers like persistance, delay loading
+        vim.defer_fn(require("taskless").load_state, 100)
+    end,
+    group = vim.api.nvim_create_augroup("Taskless", {}),
+})

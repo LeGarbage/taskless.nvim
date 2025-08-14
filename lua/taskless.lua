@@ -5,6 +5,26 @@ local state = {
     current_target = {},
 }
 
+---@class Config
+---@field default_preset string The default preset that will be used if none is provided. Set to empty string to disable
+---@field use_only_target boolean Whether to use the only target if no target is selected and there is only one
+---@field close_window boolean Whether to close the window after a successful build/config
+---@field win_config vim.api.keyset.win_config Options for the terminal window
+
+---@type Config
+local defaults = {
+    default_preset = "debug",
+    use_only_target = true,
+    close_window = false,
+    win_config = {
+        split = "below",
+        win = -1,
+        height = 10,
+        style = "minimal",
+    }
+}
+
+---@type Config
 local config
 
 -- *** STATE UTILS ***
@@ -15,7 +35,7 @@ local function save_state()
 end
 
 -- Load the configured state
-local function load_state()
+function M.load_state()
     local ok, state_text = pcall(vim.fn.readfile, "taskless.json")
 
     if ok then
@@ -42,23 +62,6 @@ local function load_state()
 end
 
 -- *** SETUP ***
-local defaults = {
-    -- The default preset that will be used if none is provided
-    -- Set to empty string to disable
-    default_preset = "debug",
-    -- Whether to use the only target if no target is selected and there is only one
-    use_only_target = true,
-    -- Whether to close the window after a successful build/run/config
-    close_window = false,
-    -- Options for the terminal window
-    --- @type vim.api.keyset.win_config
-    win_config = {
-        split = "below",
-        win = -1,
-        height = 10,
-        style = "minimal",
-    }
-}
 
 -- Load the user's config and use defaults for non-specified options
 function M.setup(user_config)
@@ -67,16 +70,6 @@ function M.setup(user_config)
     else
         config = defaults
     end
-
-    -- Only trigger on c/c++ files
-    vim.api.nvim_create_autocmd("Filetype", {
-        pattern = { "c", "cpp" },
-        callback = function()
-            -- To prevent interferance with session managers like persistance, delay loading
-            vim.defer_fn(load_state, 100)
-        end,
-        group = vim.api.nvim_create_augroup("Taskless", {}),
-    })
 end
 
 -- *** WINDOW UTILS ***
@@ -231,6 +224,10 @@ function M.configure()
                     vim.fn.mkdir(api_dir, "p")
                     vim.fn.writefile({ "" }, api_file)
                 end
+
+                if config.close_window then
+                    close_win()
+                end
             end
         end)
     end
@@ -256,6 +253,12 @@ function M.build(on_done)
 
     -- local command = string.format("cmake --build --preset %s", state.current_preset.name)
     local command = { "cmake", "--build", "--preset", state.current_preset.name }
+
+    on_done = on_done or function(result)
+        if result.code == 0 and config.close_window then
+            close_win()
+        end
+    end
 
     run_in_term(command, on_done)
 end
