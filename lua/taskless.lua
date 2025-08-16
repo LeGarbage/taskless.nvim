@@ -88,6 +88,7 @@ local function open_win(opts)
         -- A scratch buffer
         M.bufnr = vim.api.nvim_create_buf(true, true)
         vim.api.nvim_set_option_value("readonly", true, { buf = M.bufnr })
+        vim.api.nvim_set_option_value("modifiable", false, { buf = M.bufnr })
     end
 
     -- Create a new window if it doesn't exist and focus it
@@ -106,7 +107,7 @@ end
 
 -- Write text to the output window
 ---@param text string|string[] The text or list of lines to display
----@param newline? boolean Whether to add a blank line after the output
+---@param newline? boolean Whether to add a blank line after the output. Defualts to false
 local function win_write(text, newline)
     if not vim.api.nvim_buf_is_valid(M.bufnr) then
         return
@@ -140,8 +141,10 @@ local function win_write(text, newline)
 
     -- Write the text
     vim.api.nvim_set_option_value("readonly", false, { buf = M.bufnr })
+    vim.api.nvim_set_option_value("modifiable", true, { buf = M.bufnr })
     vim.api.nvim_buf_set_lines(M.bufnr, start_line, -1, false, text)
     vim.api.nvim_set_option_value("readonly", true, { buf = M.bufnr })
+    vim.api.nvim_set_option_value("modifiable", false, { buf = M.bufnr })
 
     -- Set the cursor to the end of the text
     local last_line = vim.api.nvim_buf_line_count(M.bufnr)
@@ -203,18 +206,23 @@ local function start_term(command)
     })
 
     -- Start the terminal with input captured
-    vim.api.nvim_command("startinsert")
+    if vim.api.nvim_buf_is_valid(job_bufnr) then
+        vim.api.nvim_command("startinsert")
+    end
 end
 
 -- *** CONFIGURE UTILS ***
 
 function M.configure()
+    -- Make sure there is a preset selected to configure
     if not next(state.current_preset) then
         vim.notify("Configure failed: Please select a preset", vim.log.levels.ERROR, { title = "Taskless" })
+        -- Check if there is a configure preset in the preset
     elseif not (state.current_preset.configurePreset) then
         vim.notify("Configure failed: Build preset does not specify a configure preset", vim.log.levels.ERROR,
             { title = "Taskless" })
     else
+        win_write(string.format("[Configure preset %s]", state.current_preset.configurePreset.name))
         run_in_term({ "cmake", "--preset", state.current_preset.configurePreset.name }, function(result)
             if result.code == 0 then
                 local api_dir = string.gsub(
@@ -236,6 +244,7 @@ end
 -- *** BUILD UTILS ***
 
 function M.get_build_presets()
+    -- TODO: search for the project's root directory
     local text = vim.fn.readfile(vim.fn.getcwd() .. "/" .. "CMakePresets.json")
     local presets = vim.json.decode(table.concat(text))
     for index, build_preset in ipairs(presets.buildPresets) do
@@ -252,6 +261,7 @@ function M.build(on_done)
     end
 
     -- local command = string.format("cmake --build --preset %s", state.current_preset.name)
+    win_write(string.format("[Build preset %s]", state.current_preset.name))
     local command = { "cmake", "--build", "--preset", state.current_preset.name }
 
     on_done = on_done or function(result)
@@ -348,6 +358,7 @@ function M.run()
 
             local build_path = string.gsub(state.current_preset.configurePreset.binaryDir,
                 [[${sourceDir}/]], "")
+            win_write(string.format("[Run target %s]", state.current_target.name))
             start_term(string.format("./%s", build_path .. "/" .. state.current_target.artifacts[1].path))
         end)
     end

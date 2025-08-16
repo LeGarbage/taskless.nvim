@@ -10,7 +10,7 @@
 ```
 {
     "LeGarbage/taskless.nvim",
-    -- dependencies = { "mfussenegger/nvim-dap" } -- Only if you are using dap
+    dependencies = { "mfussenegger/nvim-dap" } -- Optional - for dap
     opts = {
         -- See configuration below
     }
