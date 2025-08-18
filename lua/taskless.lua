@@ -109,9 +109,7 @@ end
 ---@param text string|string[] The text or list of lines to display
 ---@param newline? boolean Whether to add a blank line after the output. Defualts to false
 local function win_write(text, newline)
-    if not vim.api.nvim_buf_is_valid(M.bufnr) then
-        return
-    end
+    open_win()
 
     -- Split the string by newline
     if type(text) == "string" then
