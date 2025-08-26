@@ -209,9 +209,22 @@ local function start_term(command)
     end
 end
 
--- *** CONFIGURE UTILS ***
+---@class (exact) Module
+---@field configure? fun() Configures the project using the selected configure preset
+---@field build? fun(on_done?: fun(result: vim.SystemCompleted)): boolean|nil Builds the project using the selected build preset. Runs on_done when finished. Returns false if the build failed to start and nil if the build runs
+---@field get_build_presets? fun(): table[] Get all valid build presets for the curent project
+---@field run? fun() Builds the project if applicable and runs it using the selected target
+---@field get_run_targets? fun(): table[] Get all valid run targets for the curent project
+---@field debug? fun() Debugs the project using DAP
 
-function M.configure()
+-- Keys are the language to use, values are what to do with the language
+---@type {[string]: Module}
+M.modules = {}
+
+M.modules.c = {}
+
+-- c/c++
+function M.modules.c.configure()
     -- Make sure there is a preset selected to configure
     if not next(state.current_preset) then
         vim.notify("Configure failed: Please select a preset", vim.log.levels.ERROR, { title = "Taskless" })
@@ -239,9 +252,7 @@ function M.configure()
     end
 end
 
--- *** BUILD UTILS ***
-
-function M.get_build_presets()
+function M.modules.c.get_build_presets()
     -- TODO: search for the project's root directory
     local text = vim.fn.readfile(vim.fn.getcwd() .. "/" .. "CMakePresets.json")
     local presets = vim.json.decode(table.concat(text))
@@ -251,8 +262,7 @@ function M.get_build_presets()
     return presets.buildPresets
 end
 
----@param on_done? fun(result: vim.SystemCompleted)
-function M.build(on_done)
+function M.modules.c.build(on_done)
     if not next(state.current_preset) then
         vim.notify("Build failed: Please select a preset", vim.log.levels.ERROR, { title = "Taskless" })
         return false
@@ -271,12 +281,89 @@ function M.build(on_done)
     run_in_term(command, on_done)
 end
 
+function M.modules.c.get_run_targets()
+    if not next(state.current_preset) then
+        vim.notify("Could not get targets: Please select a preset", vim.log.levels.ERROR, { title = "Taskless" })
+        return {}
+    elseif not (state.current_preset.configurePreset) then
+        vim.notify("Could not get targets: Build preset does not specify a configure preset", vim.log.levels.ERROR,
+            { title = "Taskless" })
+        return {}
+    elseif not (state.current_preset.configurePreset.binaryDir) then
+        vim.notify("Could not get targets: Configure preset does not specify a binary dir", vim.log.levels.ERROR,
+            { title = "Taskless" })
+        return {}
+    end
+
+    local api_path = string.gsub(state.current_preset.configurePreset.binaryDir .. "/.cmake/api/v1/reply",
+        [[${sourceDir}/]], "")
+    local index_text = vim.fn.readfile(vim.fn.glob(api_path .. "/index*.json"))
+    local index_data = vim.json.decode(table.concat(index_text))
+    local codemodel_text = vim.fn.readfile(api_path .. "/" .. index_data.reply["codemodel-v2"].jsonFile)
+    local codemodel_data = vim.json.decode(table.concat(codemodel_text))
+    local targets = codemodel_data.configurations[1].targets
+    local target_data = {}
+    for _, target in ipairs(targets) do
+        local target_text = vim.fn.readfile(api_path .. "/" .. target.jsonFile)
+        table.insert(target_data, vim.json.decode(table.concat(target_text)))
+    end
+    return target_data
+end
+
+function M.modules.c.run()
+    if not next(state.current_target) then
+        vim.notify("Could not run target: Please select a target", vim.log.levels.ERROR, { title = "Taskless" })
+    else
+        M.build(function(result)
+            if result.code ~= 0 then
+                vim.notify("Could not run target: Build failed", vim.log.levels.ERROR, { title = "Taskless" })
+                return
+            end
+
+            local build_path = string.gsub(state.current_preset.configurePreset.binaryDir,
+                [[${sourceDir}/]], "")
+            win_write(string.format("[Run target %s]", state.current_target.name))
+            start_term(string.format("./%s", build_path .. "/" .. state.current_target.artifacts[1].path))
+        end)
+    end
+end
+
+function M.modules.c.debug()
+    if not next(state.current_target) then
+        vim.notify("Could not debug target: Please select a target", vim.log.levels.ERROR, { title = "Taskless" })
+    else
+        M.build(function(result)
+            if result.code ~= 0 then
+                vim.notify("Could not debug target: Build failed", vim.log.levels.ERROR, { title = "Taskless" })
+                return
+            end
+
+            local ok, dap = pcall(require, "dap")
+
+            if not ok then
+                vim.notify("Could not debug target: Dap not installed", vim.log.levels.ERROR, { title = "Taskless" })
+                return
+            end
+
+            close_win()
+
+            dap.continue()
+        end)
+    end
+end
+
+M.modules.cpp = M.modules.c
+
+-- Fetches build presets for the current language
+---@param preset? string Which preset to try and use
+---@param save? boolean Whether to save the selected preset to the file
 function M.select_preset(preset, save)
-    if not vim.fn.filereadable(vim.fn.getcwd() .. "/" .. "CMakePresets.json") then
-        vim.notify("CMakePresets.json not found", vim.log.levels.ERROR, { title = "Taskless" })
+    local language = M.modules[vim.bo.filetype]
+    if not (language or language.get_build_presets) then
+        vim.notify("Could not find build presets for your language", vim.log.levels.ERROR, { title = "Taskless" })
         return
     end
-    local presets = M.get_build_presets()
+    local presets = language.get_build_presets()
     if preset then
         local found = false
         for _, preset_data in ipairs(presets) do
@@ -313,57 +400,16 @@ function M.select_preset(preset, save)
     end
 end
 
--- *** RUN UTILS ***
-
-function M.get_run_targets()
-    if not next(state.current_preset) then
-        vim.notify("Could not get targets: Please select a preset", vim.log.levels.ERROR, { title = "Taskless" })
-        return {}
-    elseif not (state.current_preset.configurePreset) then
-        vim.notify("Could not get targets: Build preset does not specify a configure preset", vim.log.levels.ERROR,
-            { title = "Taskless" })
-        return {}
-    elseif not (state.current_preset.configurePreset.binaryDir) then
-        vim.notify("Could not get targets: Configure preset does not specify a binary dir", vim.log.levels.ERROR,
-            { title = "Taskless" })
-        return {}
+-- Fetches run targets for the current language
+---@param target? string Which target to try and use
+---@param save? boolean Whether to save the selected target to the file
+function M.select_target(target, save)
+    local language = M.modules[vim.bo.filetype]
+    if not (language or language.get_run_targets) then
+        vim.notify("Could not find run target for your language", vim.log.levels.ERROR, { title = "Taskless" })
+        return
     end
-
-    local api_path = string.gsub(state.current_preset.configurePreset.binaryDir .. "/.cmake/api/v1/reply",
-        [[${sourceDir}/]], "")
-    local index_text = vim.fn.readfile(vim.fn.glob(api_path .. "/index*.json"))
-    local index_data = vim.json.decode(table.concat(index_text))
-    local codemodel_text = vim.fn.readfile(api_path .. "/" .. index_data.reply["codemodel-v2"].jsonFile)
-    local codemodel_data = vim.json.decode(table.concat(codemodel_text))
-    local targets = codemodel_data.configurations[1].targets
-    local target_data = {}
-    for _, target in ipairs(targets) do
-        local target_text = vim.fn.readfile(api_path .. "/" .. target.jsonFile)
-        table.insert(target_data, vim.json.decode(table.concat(target_text)))
-    end
-    return target_data
-end
-
-function M.run()
-    if not next(state.current_target) then
-        vim.notify("Could not run target: Please select a target", vim.log.levels.ERROR, { title = "Taskless" })
-    else
-        M.build(function(result)
-            if result.code ~= 0 then
-                vim.notify("Could not run target: Build failed", vim.log.levels.ERROR, { title = "Taskless" })
-                return
-            end
-
-            local build_path = string.gsub(state.current_preset.configurePreset.binaryDir,
-                [[${sourceDir}/]], "")
-            win_write(string.format("[Run target %s]", state.current_target.name))
-            start_term(string.format("./%s", build_path .. "/" .. state.current_target.artifacts[1].path))
-        end)
-    end
-end
-
-function M.select_target(target)
-    local targets = M.get_run_targets()
+    local targets = language.get_run_targets()
     if #targets == 0 then return end
 
     if target then
@@ -396,31 +442,9 @@ function M.select_target(target)
 
     vim.notify("Target " .. state.current_target.name .. " has been selected", vim.log.levels.INFO,
         { title = "Taskless" })
-    save_state()
-end
 
--- *** DEBUG UTILS ***
-function M.debug()
-    if not next(state.current_target) then
-        vim.notify("Could not debug target: Please select a target", vim.log.levels.ERROR, { title = "Taskless" })
-    else
-        M.build(function(result)
-            if result.code ~= 0 then
-                vim.notify("Could not debug target: Build failed", vim.log.levels.ERROR, { title = "Taskless" })
-                return
-            end
-
-            local ok, dap = pcall(require, "dap")
-
-            if not ok then
-                vim.notify("Could not debug target: Dap not installed", vim.log.levels.ERROR, { title = "Taskless" })
-                return
-            end
-
-            close_win()
-
-            dap.continue()
-        end)
+    if type(save) == "nil" or save then
+        save_state()
     end
 end
 
