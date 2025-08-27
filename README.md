@@ -1,12 +1,9 @@
 # Taskless
-## Worry less about your tasks
-
-> [!NOTE]
-> This plugin is based on [neovim tasks](https://github.com/Shatur/neovim-tasks)
+**Worry less about your tasks**
 
 ## Installation
 
-### Lazy
+Lazy:
 ```
 {
     "LeGarbage/taskless.nvim",
@@ -68,11 +65,15 @@ local defaults = {
     ]
 }
 ```
-- You can set your build preset using the ```Taskless preset``` command. If you know what preset you want, you can use ```Taskless preset <preset name>``` to select that preset. When run without a preset specified. A menu will pop up asking you to choose one, or the onl preset will be chosen if you have one.
+- You can set your build preset using the ```Taskless preset``` command. If you know what preset you want, you can use ```Taskless preset <preset name>``` to select that preset. When run without a preset specified. A menu will pop up asking you to choose one, or the only preset will be chosen if you have one.
 - The configure preset is determined based on your build preset
-- You can set your run target using the ```Taskless target``` command. If you know what target you want, you can use ```Taskless target <target name>``` to select that target. When run without a target specified. A menu will pop up asking you to choose one, or the onl target will be chosen if you have one.
+- You can set your run target using the ```Taskless target``` command. If you know what target you want, you can use ```Taskless target <target name>``` to select that target. When run without a target specified. A menu will pop up asking you to choose one, or the only target will be chosen if you have one.
 > [!TIP]
 >  The first time you use Taskless, run ```Taskless configure``` to generate the cmake api files
 - Run ```Taskless build``` to build the project based on your selected preset
 - Run ```Taskless run``` to build the project based on your selected preset and run the selected target
 - Run ```Taskless debug``` to build the project based on your selected preset start the debugger
+
+## Alternatives
+- [neovim-tasks](https://github.com/Shatur/neovim-tasks)
+- [overseer.nvim](https://github.com/stevearc/overseer.nvim)
