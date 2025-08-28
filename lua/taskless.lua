@@ -221,13 +221,19 @@ end
 ---@type {[string]: Module}
 M.modules = {}
 
-local language_fallback = setmetatable({}, {
-    __index = function(_, key)
-        return function()
-            vim.notify("Language " .. vim.bo.filetype .. " has no " .. key .. " capability", vim.log.levels.ERROR,
-                { title = "Taskless" })
+local function fallback_function(_, key)
+    return function()
+        -- If the language does not have presets or targets, then just return nothing
+        if key == "get_run_targets" or key == "get_build_presets" then
+            return {}
         end
+        vim.notify("Language " .. vim.bo.filetype .. " has no " .. key .. " capability", vim.log.levels.ERROR,
+            { title = "Taskless" })
     end
+end
+
+local language_fallback = setmetatable({}, {
+    __index = fallback_function
 })
 
 setmetatable(M.modules, {
@@ -368,16 +374,32 @@ M.modules.c = {
 
 M.modules.cpp = M.modules.c
 
+M.modules.python = {
+    run = function()
+        local file = vim.api.nvim_buf_get_name(0)
+        win_write(string.format("[Run target %s]", file))
+        start_term(string.format("python3 " .. file))
+    end
+}
+
+for _, module in pairs(M.modules) do
+    setmetatable(module, {
+        __index = fallback_function
+    })
+end
+
 -- Fetches build presets for the current language
 ---@param preset? string Which preset to try and use
 ---@param save? boolean Whether to save the selected preset to the file
 function M.select_preset(preset, save)
-    local language = M.modules[vim.bo.filetype]
-    if not (language or language.get_build_presets) then
-        vim.notify("Could not find build presets for your language", vim.log.levels.ERROR, { title = "Taskless" })
+    -- rawget so that the __index function doesn't detect something that doesn't exist
+    local language = vim.bo.filetype
+    local language_module = rawget(M.modules, language)
+    if not (language_module and rawget(language_module, "get_build_presets")) then
+        vim.notify("Could not find build presets for " .. language, vim.log.levels.ERROR, { title = "Taskless" })
         return
     end
-    local presets = language.get_build_presets()
+    local presets = language_module.get_build_presets()
     if preset then
         local found = false
         for _, preset_data in ipairs(presets) do
@@ -418,12 +440,13 @@ end
 ---@param target? string Which target to try and use
 ---@param save? boolean Whether to save the selected target to the file
 function M.select_target(target, save)
-    local language = M.modules[vim.bo.filetype]
-    if not (language or language.get_run_targets) then
-        vim.notify("Could not find run target for your language", vim.log.levels.ERROR, { title = "Taskless" })
+    local language = vim.bo.filetype
+    local language_module = rawget(M.modules, language)
+    if not (language_module and rawget(language_module, "get_run_targets")) then
+        vim.notify("Could not find run targets for " .. language, vim.log.levels.ERROR, { title = "Taskless" })
         return
     end
-    local targets = language.get_run_targets()
+    local targets = language_module.get_run_targets()
     if #targets == 0 then return end
 
     if target then

@@ -74,6 +74,19 @@ local defaults = {
 - Run ```Taskless run``` to build the project based on your selected preset and run the selected target
 - Run ```Taskless debug``` to build the project based on your selected preset start the debugger
 
+## Modules
+Taskless separates languages into modules. The module is selected based on the current buffer's filetype. Each module has different definitions for each function, or may not define some at all, depending on what makes sense for the language.
+
+### Creating your own modules
+To create your own module, simply add a table to the modules table with the key of the language you wish to use. For example, to define a module for python, you could do the following:
+```
+require("taskless").modules.python = {
+    run = function()
+        -- Run the current python file
+    }
+}
+```
+
 ## Alternatives
 - [neovim-tasks](https://github.com/Shatur/neovim-tasks)
 - [overseer.nvim](https://github.com/stevearc/overseer.nvim)
