@@ -212,9 +212,9 @@ end
 ---@class (exact) Module
 ---@field configure? fun() Configures the project using the selected configure preset
 ---@field build? fun(on_done?: fun(result: vim.SystemCompleted)): boolean|nil Builds the project using the selected build preset. Runs on_done when finished. Returns false if the build failed to start and nil if the build runs
----@field get_build_presets? fun(): table[] Get all valid build presets for the curent project
+---@field get_build_presets? fun(): table[] Get all valid build presets for the current project
 ---@field run? fun() Builds the project if applicable and runs it using the selected target
----@field get_run_targets? fun(): table[] Get all valid run targets for the curent project
+---@field get_run_targets? fun(): table[] Get all valid run targets for the current project
 ---@field debug? fun() Debugs the project using DAP
 
 -- Keys are the language to use, values are what to do with the language
@@ -333,7 +333,7 @@ M.modules.c = {
         if not next(state.current_target) then
             vim.notify("Could not run target: Please select a target", vim.log.levels.ERROR, { title = "Taskless" })
         else
-            M.build(function(result)
+            M.modules.c.build(function(result)
                 if result.code ~= 0 then
                     vim.notify("Could not run target: Build failed", vim.log.levels.ERROR, { title = "Taskless" })
                     return
@@ -351,7 +351,7 @@ M.modules.c = {
         if not next(state.current_target) then
             vim.notify("Could not debug target: Please select a target", vim.log.levels.ERROR, { title = "Taskless" })
         else
-            M.build(function(result)
+            M.modules.c.build(function(result)
                 if result.code ~= 0 then
                     vim.notify("Could not debug target: Build failed", vim.log.levels.ERROR, { title = "Taskless" })
                     return

@@ -38,12 +38,12 @@ end, {
     end,
 })
 
--- Only trigger on c/c++ files
+-- Automatically load c/c++ presets/targets
 vim.api.nvim_create_autocmd("Filetype", {
     pattern = { "c", "cpp" },
     callback = function()
         local taskless = require("taskless")
-        -- To prevent interferance with session managers like persistance, delay loading
+        -- To prevent interference with session managers like persistence, delay loading
         vim.defer_fn(taskless.load_state, 100)
     end,
     group = vim.api.nvim_create_augroup("Taskless", {}),
